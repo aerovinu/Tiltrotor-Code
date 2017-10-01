@@ -1,261 +1,277 @@
-/*Hardware setup for IMU: 
-MPU9250 Breakout --------- Arduino 
-VDD ---------------------- 3.3V 
-VDDI --------------------- 3.3V 
-SDA ----------------------- A4 
-SCL ----------------------- A5 
-GND ---------------------- GND 
-*/ 
+/*Hardware setup for IMU:
+MPU9250 Breakout --------- Arduino
+VDD ---------------------- 3.3V
+SDA ----------------------- A4
+SCL ----------------------- A5
+GND ---------------------- GND
+*/
 
 #include <MPU9250.h>
 #include <quaternionFilters.h>
-#include <Servo.h> //libraries for ESCs and IMU 
+#include <Servo.h> //libraries for ESCs and IMU
+#include <Wire.h>
 
-int findintg(double[], int); //function to find integral 
-void IMUinit(); 
-void ESCinit(); 
+// Maximum throttle coming in from the controller.
+#define MAXTHROTTLE 1800
 
-Servo esc5, esc2, esc3, esc4; //declare each esc object 
-MPU9250 myIMU; //declare IMU object 
-float axinit, ayinit, gxinit, gyinit, gzinit, ax, ay, gx, gy, gz; //accelerometer and gyro vars 
-int ch3, ch5, initavg, i = 0, k = 0, store1 = 0, store2 = 0, store3 = 0, store4 = 0; //ch3 is throttle, ch5 is estop switch, initavg is average initial PWM coming from rx, i and k are counters 
-const int MAX = 100; //const integer for the size of the arrays that store accelerometer values 
-long initsum = 0; //sum of throttle values for calibration 
-double xvals[MAX], yvals[MAX]; //arrays to store accelerometer values, 
+// PID coefficients
+#define P_COEF 65
+#define I_COEF 0.05
+#define D_COEF 0.8
 
-void setup() { 
-  pinMode(7, INPUT); //pin 7 receives ch3 
-  pinMode(9, INPUT); //pin 9 receives ch5 
-  float axsum = 0, aysum = 0, gxsum = 0, gysum = 0, gzsum = 0; //vars to store sums of initial a and g values for calibration 
-  int i = 0, j = 0; //counters 
-  
-  Wire.begin(); 
-  Serial.begin(38400); 
-  IMUinit(); //initializes IMU 
-  
-  while(millis() < 1900) { 
-    myIMU.readAccelData(myIMU.accelCount); 
-    myIMU.getAres(); 
-    axsum = axsum + (float)myIMU.accelCount[0]*myIMU.aRes; 
-    aysum = aysum + (float)myIMU.accelCount[1]*myIMU.aRes; 
-    i++; 
-  } //calibration of IMU taking into account initial angular data - therefore quad should NOT start on an incline; will have to find fix for this eventually 
+void calibrate();
+void IMUinit();
+void ESCinit();
+double clip(double val, double min, double max);
+
+Servo esc1, esc2, esc3, esc4; //declare each esc object MadgwickQuaternionUpdate
+MPU9250 IMU;
+
+// Calibration values
+float axinit, ayinit, gxinit, gyinit, gzinit, throttleinit;
+
+// Number of loop() iterations
+int iters;
+
+// Integral
+long double axint, ayint;
+
+// Keep track of the last 5 estop inputs and only trigger an estop if they are
+// all above threshold. This is necessary to prevent fluctuations from
+// accidentally triggering an estop.
+int estop_hist[5];
+
+// Calibrate the accelerometer/gyro/throttle by measuring the initial values
+// (averaging over several seconds). This function blocks for ~3 seconds.
+void calibrate() {
+  float accelSum[] = { 0, 0 };
+  float gyroSum[] = { 0, 0, 0 };
+  float throttleSum = 0;
+  int accelCount = 0, gyroCount = 0, throttleSum;
+
+  // TODO: Why are accelerometer and gyro calibrated independently?
+
+  while (millis() < 1900) {
+    IMU.readAccelData(IMU.accelCount);
+    IMU.getAres();
+    accelSum[0] += (float)IMU.accelCount[0] * IMU.aRes;
+    accelSum[1] += (float)IMU.accelCount[1] * IMU.aRes;
+    accelCount++;
+  }
 
   while(millis() < 2200) {
-    myIMU.readGyroData(myIMU.gyroCount); 
-    myIMU.getGres(); 
-    gxsum = gxsum + (float)myIMU.gyroCount[0]*myIMU.gRes; 
-    gysum = gysum + (float)myIMU.gyroCount[1]*myIMU.gRes; 
-    gzsum = gzsum + (float)myIMU.gyroCount[2]*myIMU.gRes; 
-    j++; 
-  } //same as above for gyro 
+    myIMU.readGyroData(IMU.gyroCount);
+    myIMU.getGres();
+    gyroSum[0] += (float)IMU.gyroCount[0] * IMU.gRes;
+    gyroSum[1] += (float)IMU.gyroCount[1] * IMU.gRes;
+    gyroSum[2] += (float)IMU.gyroCount[2] * IMU.gRes;
+    gyroCount++;
+  }
 
-  axinit = axsum / i; 
-  ayinit = aysum / i; 
-  gxinit = gxsum / j; 
-  gyinit = gysum / j; 
-  gzinit = gzsum / j; 
-  
-  ESCinit(); //initializes ESCs 
-  
-  while(millis() < 3000){ 
-    ch3 = pulseIn(7, HIGH, 25000); 
-    initsum = initsum + ch3; 
-    i++; 
-    delay(100); 
-  } 
-  initavg = initsum / i; //finds avg pwm in from ch3 for scale of throttle signals 
+  // Keep track of throttle in during calibration, and use this as a baseline
+  // during operation.
+  while (millis() < 3000) {
+    escSum += pulseIn(7, HIGH, 25000);
+    escCount++;
+    delay(100);
+  }
 
-} 
+  axinit = accelSum[0] / accelCount;
+  ayinit = accelSum[1] / accelCount;
 
-void loop() { 
+  gxinit = gyroSum[0] / gyroCount;
+  gyinit = gyroSum[1] / gyroCount;
+  gzinit = gyroSum[2] / gyroCount;
 
-  int throttlein, throttle5 = 551, throttle2 = 551, throttle3 = 551, throttle4 = 551, maxthrottle = 1800, stablethrottle = 1800, minthrottle = 550, xint = 0, yint = 0; 
-  double jx = 0, jy = 0, jz = 0, intfact = 0.05, derfact = .8, profact = 65; 
-  
-  if(i == 100) i = 0; 
-  i++; //cycler for a value storing in array 
-  
-  ch3 = pulseIn(7, HIGH, 25000); 
-  throttlein = (abs(ch3 - initavg))*1.6 - 1000; //determines throttlein 
-  
-  store4 = store3; 
-  store3 = store2; 
-  store2 = store1; 
-  store1 = ch5; 
-  ch5 = pulseIn(9, HIGH, 25000); 
-  if((ch5 > 1600)&&(store1 > 1600)&&(store2 > 1600)&&(store3 > 1600)&&(store4 > 1600)){ 
-  while(millis() < 1000000000){ 
-  esc5.write(0); 
-  esc2.write(0); 
-  esc3.write(0); 
-  esc4.write(0); 
-  } 
-  } //immediately shuts off motors if kill switch is activated 
-  
-  if((throttlein > maxthrottle)){ //if connection lost 
-  Serial.println ("error"); 
-  int time0 = millis(); 
-  while((millis() - time0) < 1000000){ 
-  
-  if(i == 100) i = 0; 
-  i++; //same as above 
-  
-  store4 = store3; 
-  store3 = store2; 
-  store2 = store1; 
-  store1 = ch5; 
-  ch5 = pulseIn(9, HIGH, 25000); 
-  if((ch5 > 1600)&&(store1 > 1600)&&(store2 > 1600)&&(store3 > 1600)&&(store4 > 1600)){ 
-    while(millis() < 1000000000){ 
-        esc5.write(550); 
-        esc2.write(550); 
-        esc3.write(550); 
-        esc4.write(550); 
-      } 
-    } ///same as above 
-    
-    myIMU.readAccelData(myIMU.accelCount); 
-    myIMU.getAres(); 
-    myIMU.ax = (float)myIMU.accelCount[0]*myIMU.aRes; 
-    myIMU.ay = (float)myIMU.accelCount[1]*myIMU.aRes; 
-    myIMU.az = (float)myIMU.accelCount[2]*myIMU.aRes; 
-    ax = myIMU.ax - axinit; 
-    ay = myIMU.ay - ayinit; //reads in a values 
-    
-    myIMU.readGyroData(myIMU.gyroCount); 
-    myIMU.getGres(); 
-    myIMU.gx = (float)myIMU.gyroCount[0]*myIMU.gRes; 
-    myIMU.gy = (float)myIMU.gyroCount[1]*myIMU.gRes; 
-    myIMU.gz = (float)myIMU.gyroCount[2]*myIMU.gRes; 
-    gx = myIMU.gx - gxinit; 
-    gy = myIMU.gy - gyinit; 
-    gz = myIMU.gz - gzinit; //reads in g values 
-    
-    xvals[i] = ax; 
-    yvals[i] = ay; //stores a values in array 
-    if(millis() < 6600){ 
-      xint = findintg(xvals, i); 
-      yint = findintg(yvals, i); 
-    } //passes array to findintg function to find integral 
-    
-    else{ 
-      xint = findintg(xvals, 100); 
-      yint = findintg(yvals, 100); 
-    } //once more than 100 values have been stored in array, it no longer cycles the same way 
-    
-    if(throttle5 > 550) throttle5 = 1800 + profact*(ax + ay) + derfact*(gx - gy) + intfact*(xint + yint) - (millis()- time0)*.1; 
-    else throttle5 = 550; 
-    if(throttle2 > 550) throttle2 = 1800 + profact*(ax - ay) + derfact*(-gx - gy) + intfact*(xint - yint) - (millis()- time0)*.1; 
-    else throttle2 = 550; 
-    if(throttle3 > 550)throttle3 = 1800 - profact*(ax + ay) + derfact*(-gx + gy) - intfact*(xint + yint) - (millis()- time0)*.1; 
-    else throttle3 = 550; 
-    if(throttle4 > 550)throttle4 = 1800 - profact*(ax - ay) + derfact*(gx + gy) - intfact*(xint - yint) - (millis()- time0)*.1; //+500 because strangely two separate throttle ranges: 800-2000 and 0-500??? 
-    else throttle4 = 550; 
-    
-    esc5.write(throttle5); 
-    esc2.write(throttle2); 
-    esc3.write(throttle3*.64 + 692); //esc3 is calibrated differently; couldn't get it the same 
-    esc4.write(throttle4); //tells copter to stabilize and reduce throttle slowly if control is lost 
-    } 
-  } 
-  
-  myIMU.readAccelData(myIMU.accelCount); 
-  myIMU.getAres(); 
-  myIMU.ax = (float)myIMU.accelCount[0]*myIMU.aRes; 
-  myIMU.ay = (float)myIMU.accelCount[1]*myIMU.aRes; 
-  myIMU.az = (float)myIMU.accelCount[2]*myIMU.aRes; 
-  ax = myIMU.ax - axinit; 
-  ay = myIMU.ay - ayinit; //reads in a data 
-  
-  myIMU.readGyroData(myIMU.gyroCount); 
-  myIMU.getGres(); 
-  myIMU.gx = (float)myIMU.gyroCount[0]*myIMU.gRes; 
-  myIMU.gy = (float)myIMU.gyroCount[1]*myIMU.gRes; 
-  myIMU.gz = (float)myIMU.gyroCount[2]*myIMU.gRes; 
-  gx = myIMU.gx - gxinit; 
-  gy = myIMU.gy - gyinit; //reads in g data 
-  
-  xvals[i] = ax; 
-  yvals[i] = ay; //stores a values in array 
-  
-  if(millis() < 6600){ 
-    xint = findintg(xvals, i); 
-    yint = findintg(yvals, i); 
-  } 
-  
-  else{ 
-    xint = findintg(xvals, 100); 
-    yint = findintg(yvals, 100); 
-  } //as described above 
-  
-  throttle5 = throttlein + profact*(ax + ay) + derfact*(gx - gy) + intfact*(xint + yint); 
-  throttle2 = throttlein + profact*(ax - ay) + derfact*(-gx - gy) + intfact*(xint - yint); 
-  throttle3 = throttlein - profact*(ax + ay) + derfact*(-gx + gy) - intfact*(xint + yint); 
-  throttle4 = throttlein - profact*(ax - ay) + derfact*(gx + gy) - intfact*(xint - yint); //sum of throttle inputs 
-  
-  if(throttle5 < minthrottle) throttle5 = 550; 
-  if(throttle2 < minthrottle) throttle2 = 550; 
-  if(throttle3 < minthrottle) throttle3 = 550; 
-  if(throttle4 < minthrottle) throttle4 = 550; //prevents overthrottling due to tilt from the weird 0-500 range 
-  
-  esc5.write(throttle5); 
-  esc2.write(throttle2); 
-  esc3.write(throttle3*.64 + 692); 
-  esc4.write(throttle4); //writes throttle values 
-  
-  Serial.println(throttle2); 
+  throttleinit = throttleSum / throttleCount;
+}
 
-} 
+void IMUinit() {
+  byte c = myIMU.readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);
+  if(c == 0x71) {
+    Serial.println("MPU9250: Online");
+    myIMU.MPU9250SelfTest(myIMU.SelfTest);
+    myIMU.calibrateMPU9250(myIMU.gyroBias, myIMU.accelBias);
+    myIMU.initMPU9250();
+    Serial.println("MPU9250: Initialized");
+  } else {
+    Serial.println("MPU9250: Connection Failed.");
+    Serial.println(c, HEX);
+    while(1);
+  }
+  return 0;
+}
 
-void IMUinit(){ 
-byte c = myIMU.readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250); 
-Serial.print("MPU9250 "); Serial.print("I AM "); Serial.print(c, HEX); 
-Serial.print(" I should be "); Serial.println(0x71, HEX); 
-if(c == 0x71){ 
-Serial.println("MPU9250 is online."); 
-myIMU.MPU9250SelfTest(myIMU.SelfTest); 
-myIMU.calibrateMPU9250(myIMU.gyroBias, myIMU.accelBias); 
-myIMU.initMPU9250(); 
-Serial.println("MPU9250 initialized."); 
-} //necessary initialization commands 
+void ESCinit() {
+  esc1.attach(5, 1000, 2000);
+  esc2.attach(2, 1000, 2000);
+  esc3.attach(3, 1000, 2000);
+  esc4.attach(4, 1000, 2000);
 
-else{ 
-Serial.print("Connection Failed."); 
-Serial.println(c,HEX); 
-while(1); 
-} //confirms IMU initialization 
-return 0; 
-} 
+  // esc1.write(2000);
+  // esc2.write(2000);
+  // esc3.write(2000);
+  // esc4.write(2000);
 
-void ESCinit(){ 
-esc5.attach(5); 
-esc2.attach(2); 
-esc3.attach(3); 
-esc4.attach(4); 
+  // esc1.write(0);
+  // esc2.write(0);
+  // esc3.write(0);
+  // esc4.write(0);//esc attachment and low signal, may need more depending on stubbornness of esc calibrations
 
-esc5.write(2000); 
-esc2.write(2000); 
-esc3.write(2000); 
-esc4.write(2000); 
+  return 0;
+}
 
-esc5.write(0); 
-esc2.write(0); 
-esc3.write(0); 
-esc4.write(0);//esc attachment and low signal, may need more depending on stubbornness of esc calibrations 
+void setup() {
+  pinMode(7, INPUT); //pin 7 receives ch3
+  pinMode(9, INPUT); //pin 9 receives ch5
 
-return 0; 
-} 
+  Wire.begin();
+  Serial.begin(38400);
 
-int findintg(double vals[], int num){ 
-int total = 0; 
-for(int j = 0; j < num; j++){ 
-total = total + 10*vals[j]; 
-} 
-return total; 
-} 
+  IMUinit();
+  ESCinit();
 
-/*throttle5 = throttlein + profact*(ax + ay) + derfact*(gx/(.5*abs(gx)) - gy/(.5*abs(gy))) + intfact*(xint + yint); 
-throttle2 = throttlein + profact*(ax - ay) + derfact*(-gx/(.5*abs(gx)) - gy/(.5*abs(gy))) + intfact*(xint - yint); 
-throttle3 = throttlein - profact*(ax + ay) + derfact*(-gx/(.5*abs(gx)) + gy/(.5*abs(gy))) - intfact*(xint + yint); 
-throttle4 = throttlein - profact*(ax - ay) + derfact*(gx/(.5*abs(gx)) + gy/(.5*abs(gy))) - intfact*(xint - yint); //sum of throttle inputs*/
+  Serial.print("Calibrating...");
+  calibrate();
+  Serial.println("done.");
+}
+
+void loop() {
+  // Check for estop triggered.
+  estop_hist[iters % 5] = pulseIn(9, HIGH, 25000);
+  bool estop = true;
+  for (int i = 0; i < 5; i++) {
+    if (estop_hist[i] <= 1600) estop = false;
+  }
+
+  if (estop) {
+    Serial.println("Triggered emergency shutoff.");
+    while(true) {
+      esc1.write(0);
+      esc2.write(0);
+      esc3.write(0);
+      esc4.write(0);
+    }
+  }
+
+  // Get throttle input and scale
+  int ch3 = pulseIn(7, HIGH, 25000);
+  int throttlein = abs(ch3 - initavg) * 1.6 - 1000;
+
+  // if((throttlein > MAXTHROTTLE)) { // connection is lost
+  //   Serial.println("Connection lost");
+  //   int time0 = millis();
+  //   while((millis() - time0) < 1000000) {
+
+  //     if(i == 100) i = 0;
+  //     i++; //same as above
+
+  //     store4 = store3;
+  //     store3 = store2;
+  //     store2 = store1;
+  //     store1 = ch5;
+  //     ch5 = pulseIn(9, HIGH, 25000);
+  //     if((ch5 > 1600)&&(store1 > 1600)&&(store2 > 1600)&&(store3 > 1600)&&(store4 > 1600)){
+  //       while(millis() < 1000000000){
+  //         esc1.write(550);
+  //         esc2.write(550);
+  //         esc3.write(550);
+  //         esc4.write(550);
+  //       }
+  //     } ///same as above
+
+  //     myIMU.readAccelData(myIMU.accelCount);
+  //     myIMU.getAres();
+  //     myIMU.ax = (float)myIMU.accelCount[0]*myIMU.aRes;
+  //     myIMU.ay = (float)myIMU.accelCount[1]*myIMU.aRes;
+  //     myIMU.az = (float)myIMU.accelCount[2]*myIMU.aRes;
+  //     ax = myIMU.ax - axinit;
+  //     ay = myIMU.ay - ayinit; //reads in a values
+
+  //     myIMU.readGyroData(myIMU.gyroCount);
+  //     myIMU.getGres();
+  //     myIMU.gx = (float)myIMU.gyroCount[0]*myIMU.gRes;
+  //     myIMU.gy = (float)myIMU.gyroCount[1]*myIMU.gRes;
+  //     myIMU.gz = (float)myIMU.gyroCount[2]*myIMU.gRes;
+  //     gx = myIMU.gx - gxinit;
+  //     gy = myIMU.gy - gyinit;
+  //     gz = myIMU.gz - gzinit; //reads in g values
+
+  //     xvals[i] = ax;
+  //     yvals[i] = ay; //stores a values in array
+  //     if(millis() < 6600){
+  //       xint = findintg(xvals, i);
+  //       yint = findintg(yvals, i);
+  //     } //passes array to findintg function to find integral
+
+  //     else{
+  //       xint = findintg(xvals, 100);
+  //       yint = findintg(yvals, 100);
+  //     } //once more than 100 values have been stored in array, it no longer cycles the same way
+
+  //     if(throttle5 > 550) throttle5 = 1800 + profact*(ax + ay) + derfact*(gx - gy) + intfact*(xint + yint) - (millis()- time0)*.1;
+  //     else throttle5 = 550;
+  //     if(throttle2 > 550) throttle2 = 1800 + profact*(ax - ay) + derfact*(-gx - gy) + intfact*(xint - yint) - (millis()- time0)*.1;
+  //     else throttle2 = 550;
+  //     if(throttle3 > 550)throttle3 = 1800 - profact*(ax + ay) + derfact*(-gx + gy) - intfact*(xint + yint) - (millis()- time0)*.1;
+  //     else throttle3 = 550;
+  //     if(throttle4 > 550)throttle4 = 1800 - profact*(ax - ay) + derfact*(gx + gy) - intfact*(xint - yint) - (millis()- time0)*.1; //+500 because strangely two separate throttle ranges: 800-2000 and 0-500???
+  //     else throttle4 = 550;
+
+  //     esc1.write(throttle5);
+  //     esc2.write(throttle2);
+  //     esc3.write(throttle3*.64 + 692); //esc3 is calibrated differently; couldn't get it the same
+  //     esc4.write(throttle4); //tells copter to stabilize and reduce throttle slowly if control is lost
+  //   }
+  // }
+
+  IMU.readAccelData(IMU.accelCount);
+  IMU.getAres();
+  IMU.ax = (float)IMU.accelCount[0] * IMU.aRes;
+  IMU.ay = (float)IMU.accelCount[1] * IMU.aRes;
+  IMU.az = (float)IMU.accelCount[2] * IMU.aRes;
+  ax = IMU.ax - axinit;
+  ay = IMU.ay - ayinit; //reads in a data
+
+  IMU.readGyroData(IMU.gyroCount);
+  IMU.getGres();
+  IMU.gx = (float)IMU.gyroCount[0] * IMU.gRes;
+  IMU.gy = (float)IMU.gyroCount[1] * IMU.gRes;
+  IMU.gz = (float)IMU.gyroCount[2] * IMU.gRes;
+  gx = IMU.gx - gxinit;
+  gy = IMU.gy - gyinit; //reads in g data
+
+  axint += ax;
+  ayint += ay;
+
+  throttle1 = throttlein + P_COEF * (ax + ay) + D_COEF * (gx - gy) + I_COEF * (axint + ayint);
+  throttle2 = throttlein + P_COEF * (ax - ay) + D_COEF * (-gx - gy) + I_COEF * (axint - ayint);
+  throttle3 = throttlein - P_COEF * (ax + ay) + D_COEF * (-gx + gy) - I_COEF * (axint + ayint);
+  throttle4 = throttlein - P_COEF * (ax - ay) + D_COEF * (gx + gy) - I_COEF * (axint - ayint);
+
+  throttle1 = clip(throttle1, 0, 180);
+  throttle2 = clip(throttle2, 0, 180);
+  throttle3 = clip(throttle3, 0, 180);
+  throttle4 = clip(throttle4, 0, 180);
+
+  esc1.write(throttle1);
+  esc2.write(throttle2);
+  esc3.write(throttle3);
+  esc4.write(throttle4);
+
+  Serial.print("{ ");
+  Serial.print(throttle1);
+  Serial.print(" \t");
+  Serial.print(throttle2);
+  Serial.print(" \t");
+  Serial.print(throttle3);
+  Serial.print(" \t";)
+  Serial.print(throttle4);
+  Serial.println(" }");
+
+  iters++;
+}
+
+double clip(double val, double min, double max) {
+  return MIN(MAX(val, min), max);
+}
