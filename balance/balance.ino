@@ -47,7 +47,7 @@ void calibrate() {
   float accelSum[] = { 0, 0 };
   float gyroSum[] = { 0, 0, 0 };
   float throttleSum = 0;
-  int accelCount = 0, gyroCount = 0, throttleSum;
+  int accelCount = 0, gyroCount = 0, throttleCount = 0;
 
   // TODO: Why are accelerometer and gyro calibrated independently?
 
@@ -60,8 +60,8 @@ void calibrate() {
   }
 
   while(millis() < 2200) {
-    myIMU.readGyroData(IMU.gyroCount);
-    myIMU.getGres();
+    IMU.readGyroData(IMU.gyroCount);
+    IMU.getGres();
     gyroSum[0] += (float)IMU.gyroCount[0] * IMU.gRes;
     gyroSum[1] += (float)IMU.gyroCount[1] * IMU.gRes;
     gyroSum[2] += (float)IMU.gyroCount[2] * IMU.gRes;
@@ -71,8 +71,8 @@ void calibrate() {
   // Keep track of throttle in during calibration, and use this as a baseline
   // during operation.
   while (millis() < 3000) {
-    escSum += pulseIn(7, HIGH, 25000);
-    escCount++;
+    throttleSum += pulseIn(7, HIGH, 25000);
+    throttleCount++;
     delay(100);
   }
 
@@ -87,12 +87,12 @@ void calibrate() {
 }
 
 void IMUinit() {
-  byte c = myIMU.readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);
+  byte c = IMU.readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);
   if(c == 0x71) {
     Serial.println("MPU9250: Online");
-    myIMU.MPU9250SelfTest(myIMU.SelfTest);
-    myIMU.calibrateMPU9250(myIMU.gyroBias, myIMU.accelBias);
-    myIMU.initMPU9250();
+    IMU.MPU9250SelfTest(IMU.SelfTest);
+    IMU.calibrateMPU9250(IMU.gyroBias, IMU.accelBias);
+    IMU.initMPU9250();
     Serial.println("MPU9250: Initialized");
   } else {
     Serial.println("MPU9250: Connection Failed.");
@@ -156,7 +156,7 @@ void loop() {
 
   // Get throttle input and scale
   int ch3 = pulseIn(7, HIGH, 25000);
-  int throttlein = abs(ch3 - initavg) * 1.6 - 1000;
+  int throttlein = abs(ch3 - throttleinit) * 1.6 - 1000;
 
   // if((throttlein > MAXTHROTTLE)) { // connection is lost
   //   Serial.println("Connection lost");
@@ -180,22 +180,22 @@ void loop() {
   //       }
   //     } ///same as above
 
-  //     myIMU.readAccelData(myIMU.accelCount);
-  //     myIMU.getAres();
-  //     myIMU.ax = (float)myIMU.accelCount[0]*myIMU.aRes;
-  //     myIMU.ay = (float)myIMU.accelCount[1]*myIMU.aRes;
-  //     myIMU.az = (float)myIMU.accelCount[2]*myIMU.aRes;
-  //     ax = myIMU.ax - axinit;
-  //     ay = myIMU.ay - ayinit; //reads in a values
+  //     IMU.readAccelData(IMU.accelCount);
+  //     IMU.getAres();
+  //     IMU.ax = (float)IMU.accelCount[0]*IMU.aRes;
+  //     IMU.ay = (float)IMU.accelCount[1]*IMU.aRes;
+  //     IMU.az = (float)IMU.accelCount[2]*IMU.aRes;
+  //     ax = IMU.ax - axinit;
+  //     ay = IMU.ay - ayinit; //reads in a values
 
-  //     myIMU.readGyroData(myIMU.gyroCount);
-  //     myIMU.getGres();
-  //     myIMU.gx = (float)myIMU.gyroCount[0]*myIMU.gRes;
-  //     myIMU.gy = (float)myIMU.gyroCount[1]*myIMU.gRes;
-  //     myIMU.gz = (float)myIMU.gyroCount[2]*myIMU.gRes;
-  //     gx = myIMU.gx - gxinit;
-  //     gy = myIMU.gy - gyinit;
-  //     gz = myIMU.gz - gzinit; //reads in g values
+  //     IMU.readGyroData(IMU.gyroCount);
+  //     IMU.getGres();
+  //     IMU.gx = (float)IMU.gyroCount[0]*IMU.gRes;
+  //     IMU.gy = (float)IMU.gyroCount[1]*IMU.gRes;
+  //     IMU.gz = (float)IMU.gyroCount[2]*IMU.gRes;
+  //     gx = IMU.gx - gxinit;
+  //     gy = IMU.gy - gyinit;
+  //     gz = IMU.gz - gzinit; //reads in g values
 
   //     xvals[i] = ax;
   //     yvals[i] = ay; //stores a values in array
@@ -230,24 +230,24 @@ void loop() {
   IMU.ax = (float)IMU.accelCount[0] * IMU.aRes;
   IMU.ay = (float)IMU.accelCount[1] * IMU.aRes;
   IMU.az = (float)IMU.accelCount[2] * IMU.aRes;
-  ax = IMU.ax - axinit;
-  ay = IMU.ay - ayinit; //reads in a data
+  double ax = IMU.ax - axinit;
+  double ay = IMU.ay - ayinit; //reads in a data
 
   IMU.readGyroData(IMU.gyroCount);
   IMU.getGres();
   IMU.gx = (float)IMU.gyroCount[0] * IMU.gRes;
   IMU.gy = (float)IMU.gyroCount[1] * IMU.gRes;
   IMU.gz = (float)IMU.gyroCount[2] * IMU.gRes;
-  gx = IMU.gx - gxinit;
-  gy = IMU.gy - gyinit; //reads in g data
+  double gx = IMU.gx - gxinit;
+  double gy = IMU.gy - gyinit; //reads in g data
 
   axint += ax;
   ayint += ay;
 
-  throttle1 = throttlein + P_COEF * (ax + ay) + D_COEF * (gx - gy) + I_COEF * (axint + ayint);
-  throttle2 = throttlein + P_COEF * (ax - ay) + D_COEF * (-gx - gy) + I_COEF * (axint - ayint);
-  throttle3 = throttlein - P_COEF * (ax + ay) + D_COEF * (-gx + gy) - I_COEF * (axint + ayint);
-  throttle4 = throttlein - P_COEF * (ax - ay) + D_COEF * (gx + gy) - I_COEF * (axint - ayint);
+  double throttle1 = throttlein + P_COEF * (ax + ay) + D_COEF * (gx - gy) + I_COEF * (axint + ayint);
+  double throttle2 = throttlein + P_COEF * (ax - ay) + D_COEF * (-gx - gy) + I_COEF * (axint - ayint);
+  double throttle3 = throttlein - P_COEF * (ax + ay) + D_COEF * (-gx + gy) - I_COEF * (axint + ayint);
+  double throttle4 = throttlein - P_COEF * (ax - ay) + D_COEF * (gx + gy) - I_COEF * (axint - ayint);
 
   throttle1 = clip(throttle1, 0, 180);
   throttle2 = clip(throttle2, 0, 180);
@@ -265,7 +265,7 @@ void loop() {
   Serial.print(throttle2);
   Serial.print(" \t");
   Serial.print(throttle3);
-  Serial.print(" \t";)
+  Serial.print(" \t");
   Serial.print(throttle4);
   Serial.println(" }");
 
@@ -273,5 +273,5 @@ void loop() {
 }
 
 double clip(double val, double min, double max) {
-  return MIN(MAX(val, min), max);
+  return min(max(val, min), max);
 }
