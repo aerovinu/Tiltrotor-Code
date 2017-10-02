@@ -14,6 +14,9 @@ GND ---------------------- GND
 // Maximum throttle coming in from the controller.
 #define MAXTHROTTLE 1800
 
+// How far back we keep track of ax/ay values to compute the integral.
+#define INTEGRAL_HISTORY 100
+
 // PID coefficients
 #define P_COEF 65
 #define I_COEF 0.05
@@ -28,13 +31,13 @@ Servo esc1, esc2, esc3, esc4; //declare each esc object MadgwickQuaternionUpdate
 MPU9250 IMU;
 
 // Calibration values
-float axinit, ayinit, gxinit, gyinit, gzinit, throttleinit;
+double axinit, ayinit, gxinit, gyinit, gzinit, throttleinit;
+
+// Integral histories
+double ax_hist[INTEGRAL_HISTORY], ay_hist[INTEGRAL_HISTORY];
 
 // Number of loop() iterations
 int iters;
-
-// Integral
-long double axint, ayint;
 
 // Keep track of the last 5 estop inputs and only trigger an estop if they are
 // all above threshold. This is necessary to prevent fluctuations from
@@ -241,8 +244,16 @@ void loop() {
   double gx = IMU.gx - gxinit;
   double gy = IMU.gy - gyinit; //reads in g data
 
-  axint += ax;
-  ayint += ay;
+  ax_hist[iters % INTEGRAL_HISTORY] = ax;
+  ay_hist[iters % INTEGRAL_HISTORY] = ay;
+
+  double axint = 0.0f;
+  double ayint = 0.0f;
+  int len = iters > INTEGRAL_HISTORY ? INTEGRAL_HISTORY : iters;
+  for (int i = 0; i < len; i++) {
+    axint += ax_hist[i];
+    ayint += ay_hist[i];
+  }
 
   double throttle1 = throttlein + P_COEF * (ax + ay) + D_COEF * (gx - gy) + I_COEF * (axint + ayint);
   double throttle2 = throttlein + P_COEF * (ax - ay) + D_COEF * (-gx - gy) + I_COEF * (axint - ayint);
