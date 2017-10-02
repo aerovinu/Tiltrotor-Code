@@ -18,9 +18,9 @@ GND ---------------------- GND
 #define INTEGRAL_HISTORY 100
 
 // PID coefficients
-#define P_COEF 65
-#define I_COEF 0.05
-#define D_COEF 0.8
+#define P_COEF 6.5
+#define I_COEF 0.005
+#define D_COEF 0.08
 
 void calibrate();
 void IMUinit();
