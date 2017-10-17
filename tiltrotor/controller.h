@@ -20,18 +20,19 @@ typedef struct {
 // An abstract interface representing a controller.
 class AbstractController {
 public:
-  // Initiatlize the controller with the given pin configuration.
-  AbstractController(int throttle_pin, int roll_pin, int pitch_pin, int yaw_pin)
-      : throttle_pin_(throttle_pin), roll_pin_(roll_pin),
-        pitch_pin_(pitch_pin), yaw_pin_(yaw_pin) {}
-
   // Polls the controller pins and returns the current input state.
-  virtual InputState current_state() = 0;
+  virtual InputState get_state() = 0;
+};
 
+class Controller : AbstractController {
+public:
+  Controller(int throttle_pin, int roll_pin, int pitch_pin, int yaw_pin)
+      : throttle_pin_(throttle_pin), roll_pin_(roll_pin),
+        pitch_pin_(pitch_pin), yaw_pin_(yaw_pin) {};
+
+  InputState get_state() override;
 private:
   int throttle_pin_, roll_pin_, pitch_pin_, yaw_pin_;
-}
-
-class Controller : AbstractController {}
+};
 
 #endif
