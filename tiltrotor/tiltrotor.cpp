@@ -74,6 +74,6 @@ void set_elevator_position(double position) {
 }
 
 void set_servo(Servo servo, double unscaled, double low, double high) {
-  double scaled = (unscaled - low) / (high - low);
+  double scaled = (unscaled - low) / (high - low) * 180.0f;
   servo.write(scaled);
 }
