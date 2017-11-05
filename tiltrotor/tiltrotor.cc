@@ -1,5 +1,6 @@
 #include "Arduino.h"
 #include "controller.h"
+#include "tiltrotor.h"
 
 void setup();
 void loop();
@@ -8,29 +9,15 @@ void loop_transition_flying();
 void loop_fly();
 void loop_transition_hovering();
 
-typedef enum {
-  // In hover mode
-  STATE_HOVER = 0,
-
-  // Transitioning to flying mode
-  STATE_TRANSITION_FLYING,
-
-  // In flying mode
-  STATE_FLY,
-
-  // Transitioning to hover mode
-  STATE_TRANSIITON_HOVERING
-} STATE;
-
-STATE state = STATE_HOVER;
 Controller controller(0, 0, 0, 0);
+Tiltrotor tiltrotor;
 
 void setup() {
 
 }
 
 void loop() {
-  switch (state) {
+  switch (tiltrotor.get_state()) {
     case STATE_HOVER:
     loop_hover();
     break;
