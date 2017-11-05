@@ -8,5 +8,7 @@ InputState Controller::get_state() {
   state.roll = pulseIn(roll_pin_, HIGH);
   state.pitch = pulseIn(pitch_pin_, HIGH);
   state.yaw = pulseIn(yaw_pin_, HIGH);
+
+  return state;
 }
 
