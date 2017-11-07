@@ -2,28 +2,72 @@
 
 #include <Arduino.h>
 #include <Servo.h>
+#include "PID.h"
+#include "controller.h"
+
+#define THROTTLE_PIN      (0)
+#define ROLL_PIN          (0)
+#define PITCH_PIN         (0)
+#define YAW_PIN           (0)
+
+#define MOTOR_LEFT_PIN    (0)
+#define MOTOR_RIGHT_PIN   (0)
+#define TILT_LEFT_PIN     (0)
+#define TILT_RIGHT_PIN    (0)
+#define SUPPORT_LEFT_PIN  (0)
+#define SUPPORT_RIGHT_PIN (0)
+#define AILERON_LEFT_PIN  (0)
+#define AILERON_RIGHT_PIN (0)
+#define RUDDER_PIN        (0)
+#define ELEVATOR_PIN      (0)
 
 typedef enum {
-  // In hover mode
-  STATE_HOVER = 0,
+  // Waiting for takeoff command
+  STATE_OFF = 0,
 
-  // Transitioning to flying mode
-  STATE_TRANSITION_FLYING,
+  // Balancing horizontally, height controlled by throttle. In this state, 0.0
+  // throttle will maintain fixed height and 1.0 height is maximum vertical
+  // acceleration.
+  STATE_TAKEOFF,
 
-  // In flying mode
+  // Transition from STATE_TAKEOFF to STATE_FLY.
+  STATE_START_FLYING,
+
+  // Flying horizontally.
   STATE_FLY,
 
-  // Transitioning to hover mode
-  STATE_TRANSIITON_HOVERING
-} STATE;
+  // Transitioning from STATE_FLY to STATE_LAND.
+  STATE_START_LANDING,
+
+  // Balancing horizontally, height controlled by throttle. In this state, 1.0
+  // throttle will maintain fixde height and 0.0 height turns off vertical
+  // thrust.
+  STATE_LAND
+} OP_STATE;
 
 class Tiltrotor {
 public:
-  Tiltrotor();
+  Tiltrotor()
+    : op_state_(STATE_OFF),
+      controller_(THROTTLE_PIN, ROLL_PIN, PITCH_PIN, YAW_PIN) {
+    motor_left_.attach(MOTOR_LEFT_PIN);
+    motor_right_.attach(MOTOR_RIGHT_PIN);
+    servo_tilt_left_.attach(TILT_LEFT_PIN);
+    servo_tilt_right_.attach(TILT_RIGHT_PIN);
+    motor_support_left_.attach(SUPPORT_LEFT_PIN);
+    motor_support_right_.attach(SUPPORT_RIGHT_PIN);
+    servo_aileron_left_.attach(AILERON_LEFT_PIN);
+    servo_aileron_right_.attach(AILERON_RIGHT_PIN);
+    servo_rudder_.attach(RUDDER_PIN);
+    servo_elevator_.attach(ELEVATOR_PIN);
+  };
 
-  // Get and set the state of the tiltrotor
-  STATE get_state();
-  void set_state(STATE s);
+  // Get and set the operational state of the tiltrotor
+  OP_STATE get_op_state();
+  void set_op_state(OP_STATE s);
+
+  // Get the current input state of the receiver
+  InputState get_input_state();
 
   // Sets the throttle of the main wing motors, in range [0.0, 1.0].
   void set_throttle(double throttle);
@@ -53,13 +97,19 @@ private:
   // |high| are the ends of the possible range of values of |unscaled|.
   void set_servo(Servo servo, double unscaled, double low, double high);
 
-  STATE state_;
+  OP_STATE op_state_;
+  Controller controller_;
   Servo motor_left_, motor_right_;
   Servo servo_tilt_left_, servo_tilt_right_;
   Servo motor_support_left_, motor_support_right_;
   Servo servo_aileron_left_, servo_aileron_right_;
   Servo servo_rudder_;
   Servo servo_elevator_;
+};
+
+class TiltrotorHoverPIDController : PIDController {
+public:
+  TiltrotorHoverPIDController() : PIDController(1.0, 1.0, 1.0) {};
 };
 
 #endif

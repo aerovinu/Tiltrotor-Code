@@ -1,36 +1,15 @@
 #include "tiltrotor.h"
 
-#define MOTOR_LEFT_PIN    (0)
-#define MOTOR_RIGHT_PIN   (0)
-#define TILT_LEFT_PIN     (0)
-#define TILT_RIGHT_PIN    (0)
-#define SUPPORT_LEFT_PIN  (0)
-#define SUPPORT_RIGHT_PIN (0)
-#define AILERON_LEFT_PIN  (0)
-#define AILERON_RIGHT_PIN (0)
-#define RUDDER_PIN        (0)
-#define ELEVATOR_PIN      (0)
-
-Tiltrotor::Tiltrotor() {
-  state_ = STATE_HOVER;
-  motor_left_.attach(MOTOR_LEFT_PIN);
-  motor_right_.attach(MOTOR_RIGHT_PIN);
-  servo_tilt_left_.attach(TILT_LEFT_PIN);
-  servo_tilt_right_.attach(TILT_RIGHT_PIN);
-  motor_support_left_.attach(SUPPORT_LEFT_PIN);
-  motor_support_right_.attach(SUPPORT_RIGHT_PIN);
-  servo_aileron_left_.attach(AILERON_LEFT_PIN);
-  servo_aileron_right_.attach(AILERON_RIGHT_PIN);
-  servo_rudder_.attach(RUDDER_PIN);
-  servo_elevator_.attach(ELEVATOR_PIN);
+OP_STATE Tiltrotor::get_op_state() {
+  return op_state_;
 }
 
-STATE Tiltrotor::get_state() {
-  return state_;
+void Tiltrotor::set_op_state(OP_STATE s) {
+  op_state_ = s;
 }
 
-void Tiltrotor::set_state(STATE s) {
-  state_ = s;
+InputState Tiltrotor::get_input_state() {
+  return controller_.get_state();
 }
 
 void Tiltrotor::set_throttle(double throttle) {

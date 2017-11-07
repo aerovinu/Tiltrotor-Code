@@ -17,9 +17,4 @@ private:
   int iters_;
 };
 
-class HoverPIDController : PIDController {
-public:
-  HoverPIDController() : PIDController(1.0, 1.0, 1.0) {};
-};
-
 #endif
