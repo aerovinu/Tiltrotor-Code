@@ -12,7 +12,7 @@ double PIDController::update(double error) {
     integral += error_hist_[i];
   }
 
-  if (iters > 1) {
+  if (iters_ > 1) {
     double last_err =
         error_hist_[(iters_ - 1 + INTEGRAL_DURATION) % INTEGRAL_DURATION];
     deriv = error - last_err;

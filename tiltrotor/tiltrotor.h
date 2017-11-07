@@ -1,5 +1,6 @@
 #ifndef __TILTROTOR_H__
 
+#include <Arduino.h>
 #include <Servo.h>
 
 typedef enum {
@@ -26,16 +27,16 @@ public:
 
   // Sets the throttle of the main wing motors, in range [0.0, 1.0].
   void set_throttle(double throttle);
-  void set_throttle(double left_throttle, right_throttle);
+  void set_throttle(double left_throttle, double right_throttle);
 
   // Sets the tilt of the motors, ranging from 0.0 (vertical) to 1.0
   // (horizontal).
   void set_tilt_position(double position);
-  void set_tilt_position(double left_position, right_position);
+  void set_tilt_position(double left_position, double right_position);
 
   // Sets the throttle on the back support motors, in range [0.0, 1.0].
   void set_support_throttle(double throttle);
-  void set_support_throttle(double throttle_left, throttle_right);
+  void set_support_throttle(double throttle_left, double throttle_right);
 
   // Sets the aileron position on each side, ranging from -1.0 (down) to 1.0
   // (up).
@@ -52,13 +53,13 @@ private:
   // |high| are the ends of the possible range of values of |unscaled|.
   void set_servo(Servo servo, double unscaled, double low, double high);
 
-  State state_;
+  STATE state_;
   Servo motor_left_, motor_right_;
   Servo servo_tilt_left_, servo_tilt_right_;
   Servo motor_support_left_, motor_support_right_;
   Servo servo_aileron_left_, servo_aileron_right_;
   Servo servo_rudder_;
   Servo servo_elevator_;
-}
+};
 
 #endif

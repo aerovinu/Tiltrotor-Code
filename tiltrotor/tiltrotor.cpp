@@ -11,7 +11,7 @@
 #define RUDDER_PIN        (0)
 #define ELEVATOR_PIN      (0)
 
-Tiltrotor() {
+Tiltrotor::Tiltrotor() {
   state_ = STATE_HOVER;
   motor_left_.attach(MOTOR_LEFT_PIN);
   motor_right_.attach(MOTOR_RIGHT_PIN);
@@ -26,54 +26,57 @@ Tiltrotor() {
 }
 
 STATE Tiltrotor::get_state() {
-  return this.state_;
+  return state_;
 }
 
 void Tiltrotor::set_state(STATE s) {
-  this.state_ = s;
+  state_ = s;
 }
 
-void set_throttle(double throttle) {
-  this.set_throttle(throttle, throttle);
+void Tiltrotor::set_throttle(double throttle) {
+  set_throttle(throttle, throttle);
 }
 
-void set_throttle(double left_throttle, double right_throttle) {
-  this.set_servo(this.motor_left_, left_throttle, 0.0f, 1.0f);
-  this.set_servo(this.motor_right_, right_throttle, 0.0f, 1.0f);
+void Tiltrotor::set_throttle(double left_throttle, double right_throttle) {
+  set_servo(motor_left_, left_throttle, 0.0f, 1.0f);
+  set_servo(motor_right_, right_throttle, 0.0f, 1.0f);
 }
 
-void set_tilt_position(double position) {
-  this.set_tilt_position(position, position);
+void Tiltrotor::set_tilt_position(double position) {
+  set_tilt_position(position, position);
 }
 
-void set_tilt_position(double left_position, right_position) {
-  this.set_servo(this.servo_tilt_left_, left_position, 0.0f, 1.0f);
-  this.set_servo(this.servo_tilt_right_, right_position, 0.0f, 1.0f);
+void Tiltrotor::set_tilt_position(double left_position, double right_position) {
+  set_servo(servo_tilt_left_, left_position, 0.0f, 1.0f);
+  set_servo(servo_tilt_right_, right_position, 0.0f, 1.0f);
 }
 
-void set_support_throttle(double throttle) {
-  this.set_support_throttle(throttle, throttle);
+void Tiltrotor::set_support_throttle(double throttle) {
+  set_support_throttle(throttle, throttle);
 }
 
-void set_support_throttle(double left_throttle, right_throttle) {
-  this.set_servo(this.motor_support_left_, left_throttle, 0.0f, 1.0f);
-  this.set_servo(this.motor_support_right_, right_throttle, 0.0f, 1.0f);
+void Tiltrotor::set_support_throttle(
+    double left_throttle, double right_throttle) {
+  set_servo(motor_support_left_, left_throttle, 0.0f, 1.0f);
+  set_servo(motor_support_right_, right_throttle, 0.0f, 1.0f);
 }
 
-void set_aileron_position(double left_position, right_position) {
-  this.set_servo(this.servo_aileron_left_, left_position, -1.0f, 1.0f);
-  this.set_servo(this.servo_aileron_right_, right_position, -1.0f, 1.0f);
+void Tiltrotor::set_aileron_position(
+    double left_position, double right_position) {
+  set_servo(servo_aileron_left_, left_position, -1.0f, 1.0f);
+  set_servo(servo_aileron_right_, right_position, -1.0f, 1.0f);
 }
 
-void set_rudder_position(double position) {
-  this.set_servo(this.servo_rudder_, position, -1.0f, 1.0f);
+void Tiltrotor::set_rudder_position(double position) {
+  set_servo(servo_rudder_, position, -1.0f, 1.0f);
 }
 
-void set_elevator_position(double position) {
-  this.set_servo(this.servo_elevator_, position, -1.0f, 1.0f);
+void Tiltrotor::set_elevator_position(double position) {
+  set_servo(servo_elevator_, position, -1.0f, 1.0f);
 }
 
-void set_servo(Servo servo, double unscaled, double low, double high) {
+void Tiltrotor::set_servo(
+    Servo servo, double unscaled, double low, double high) {
   double scaled = (unscaled - low) / (high - low) * 180.0f;
   servo.write(scaled);
 }
