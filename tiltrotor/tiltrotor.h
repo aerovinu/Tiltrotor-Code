@@ -2,14 +2,17 @@
 
 #include <Arduino.h>
 #include <Servo.h>
+#include <MPU9250.h>
 #include "PID.h"
 #include "controller.h"
 
+// Receiver pins
 #define THROTTLE_PIN      (0)
 #define ROLL_PIN          (0)
 #define PITCH_PIN         (0)
 #define YAW_PIN           (0)
 
+// ESC/servo pins
 #define MOTOR_LEFT_PIN    (0)
 #define MOTOR_RIGHT_PIN   (0)
 #define TILT_LEFT_PIN     (0)
@@ -21,6 +24,7 @@
 #define RUDDER_PIN        (0)
 #define ELEVATOR_PIN      (0)
 
+// The OP_STATE enum defines the possible states that the tiltrotor can be in.
 typedef enum {
   // Waiting for takeoff command
   STATE_OFF = 0,
@@ -45,22 +49,14 @@ typedef enum {
   STATE_LAND
 } OP_STATE;
 
+typedef struct {
+  int accel[3];
+  int gyro[3];
+} SensorState;
+
 class Tiltrotor {
 public:
-  Tiltrotor()
-    : op_state_(STATE_OFF),
-      controller_(THROTTLE_PIN, ROLL_PIN, PITCH_PIN, YAW_PIN) {
-    motor_left_.attach(MOTOR_LEFT_PIN);
-    motor_right_.attach(MOTOR_RIGHT_PIN);
-    servo_tilt_left_.attach(TILT_LEFT_PIN);
-    servo_tilt_right_.attach(TILT_RIGHT_PIN);
-    motor_support_left_.attach(SUPPORT_LEFT_PIN);
-    motor_support_right_.attach(SUPPORT_RIGHT_PIN);
-    servo_aileron_left_.attach(AILERON_LEFT_PIN);
-    servo_aileron_right_.attach(AILERON_RIGHT_PIN);
-    servo_rudder_.attach(RUDDER_PIN);
-    servo_elevator_.attach(ELEVATOR_PIN);
-  };
+  Tiltrotor();
 
   // Get and set the operational state of the tiltrotor
   OP_STATE get_op_state();
@@ -68,6 +64,9 @@ public:
 
   // Get the current input state of the receiver
   InputState get_input_state();
+
+  // Get the current sensor state from the IMU
+  SensorState get_sensor_state();
 
   // Sets the throttle of the main wing motors, in range [0.0, 1.0].
   void set_throttle(double throttle);
@@ -99,6 +98,8 @@ private:
 
   OP_STATE op_state_;
   Controller controller_;
+  MPU9250 imu_;
+  SensorState last_sensor_state_;
   Servo motor_left_, motor_right_;
   Servo servo_tilt_left_, servo_tilt_right_;
   Servo motor_support_left_, motor_support_right_;
