@@ -27,10 +27,11 @@ Tiltrotor tiltrotor;
 
 // The PID controller used for hovering states (STATE_TAKEOFF, STATE_LAND). Must
 // be reset before transitioning away from a hovering state.
-TiltrotorHoverPIDController hover_pid;
+TiltrotorHoverPIDController hover_pid_motor_left, hover_pid_motor_right,
+    hover_pid_support_left, hover_pid_support_right;
 
-// The time (milliseconds from program start) when the previous loop finished
-// executing.
+// The time (milliseconds from program start) when the previous loop iteration
+// finished executing.
 unsigned long last_loop_time = 0;
 
 // You should not need to use this variable. This is used by the RATE_LIMIT
@@ -78,8 +79,19 @@ void loop_off() {
 }
 
 void loop_takeoff() {
+  // Only run the loop every 1/10th of a second
   RATE_LIMIT(100) {
+    InputState is = tiltrotor.get_input_state();
+    SensorState ss = tiltrotor.get_sensor_state();
 
+    // Compute PID update for main and support motors and set new throttle
+    tiltrotor.set_throttle(
+      is.throttle + hover_pid_motor_left.update(ss.accel[0] + ss.accel[1]),
+      is.throttle + hover_pid_motor_right.update(ss.accel[0] - ss.accel[1]));
+
+    tiltrotor.set_support_throttle(
+      is.throttle + hover_pid_support_left.update(-ss.accel[0] - ss.accel[1]),
+      is.throttle + hover_pid_support_right.update(-ss.accel[0] + ss.accel[1]));
   }
 }
 

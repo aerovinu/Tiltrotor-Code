@@ -108,7 +108,7 @@ private:
   Servo servo_elevator_;
 };
 
-class TiltrotorHoverPIDController : PIDController {
+class TiltrotorHoverPIDController : public PIDController {
 public:
   TiltrotorHoverPIDController() : PIDController(1.0, 1.0, 1.0) {};
 };
