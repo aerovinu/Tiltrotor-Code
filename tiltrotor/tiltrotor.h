@@ -46,7 +46,12 @@ typedef enum {
   // Balancing horizontally, height controlled by throttle. In this state, 1.0
   // throttle will maintain fixde height and 0.0 height turns off vertical
   // thrust.
-  STATE_LAND
+  STATE_LAND,
+
+  // Only occurs in response to an emergency stop being triggered by a call to
+  // `estop()`. When the tiltrotor is in this state, all input commands will be
+  // no-ops.
+  STATE_STOPPED
 } OP_STATE;
 
 typedef struct {
@@ -90,6 +95,10 @@ public:
 
   // Sets the elevator position, ranging from -1.0 (down) to 1.0 (up).
   void set_elevator_position(double position);
+
+  // Turn off all motors, transitioning the tiltrotor to `STATE_STOPPED` state
+  // (disabling tiltrotor commands).
+  void estop();
 private:
   // Internal function to send a PWM signal to a servo. It takes an unscaled
   // value and converts it to a 0-180 range as expected by |servo|. |low| and

@@ -52,45 +52,61 @@ SensorState Tiltrotor::get_sensor_state() {
 }
 
 void Tiltrotor::set_throttle(double throttle) {
+  if (get_op_state() == STATE_STOPPED) return;
   set_throttle(throttle, throttle);
 }
 
 void Tiltrotor::set_throttle(double left_throttle, double right_throttle) {
+  if (get_op_state() == STATE_STOPPED) return;
   set_servo(motor_left_, left_throttle, 0.0f, 1.0f);
   set_servo(motor_right_, right_throttle, 0.0f, 1.0f);
 }
 
 void Tiltrotor::set_tilt_position(double position) {
+  if (get_op_state() == STATE_STOPPED) return;
   set_tilt_position(position, position);
 }
 
 void Tiltrotor::set_tilt_position(double left_position, double right_position) {
+  if (get_op_state() == STATE_STOPPED) return;
   set_servo(servo_tilt_left_, left_position, 0.0f, 1.0f);
   set_servo(servo_tilt_right_, right_position, 0.0f, 1.0f);
 }
 
 void Tiltrotor::set_support_throttle(double throttle) {
+  if (get_op_state() == STATE_STOPPED) return;
   set_support_throttle(throttle, throttle);
 }
 
 void Tiltrotor::set_support_throttle(
     double left_throttle, double right_throttle) {
+  if (get_op_state() == STATE_STOPPED) return;
   set_servo(motor_support_left_, left_throttle, 0.0f, 1.0f);
   set_servo(motor_support_right_, right_throttle, 0.0f, 1.0f);
 }
 
 void Tiltrotor::set_aileron_position(
     double left_position, double right_position) {
+  if (get_op_state() == STATE_STOPPED) return;
   set_servo(servo_aileron_left_, left_position, -1.0f, 1.0f);
   set_servo(servo_aileron_right_, right_position, -1.0f, 1.0f);
 }
 
 void Tiltrotor::set_rudder_position(double position) {
+  if (get_op_state() == STATE_STOPPED) return;
   set_servo(servo_rudder_, position, -1.0f, 1.0f);
 }
 
 void Tiltrotor::set_elevator_position(double position) {
+  if (get_op_state() == STATE_STOPPED) return;
   set_servo(servo_elevator_, position, -1.0f, 1.0f);
+}
+
+void Tiltrotor::estop() {
+  set_throttle(0.0f);
+  set_support_throttle(0.0f);
+
+  set_op_state(STATE_STOPPED);
 }
 
 void Tiltrotor::set_servo(

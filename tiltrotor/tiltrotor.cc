@@ -22,6 +22,7 @@ void loop_start_landing();
 void loop_land();
 
 void hover_loop();
+bool estop_check();
 
 // The tiltrotor object communicates with the board directly, exposing functions
 // for controlling individual movements.
@@ -31,6 +32,9 @@ Tiltrotor tiltrotor;
 // be reset before transitioning away from a hovering state.
 TiltrotorHoverPIDController hover_pid_motor_left, hover_pid_motor_right,
     hover_pid_support_left, hover_pid_support_right;
+
+// The number of loop iterations we have gone through.
+unsigned long loop_count = 0;
 
 // The time (milliseconds from program start) when the previous loop iteration
 // finished executing.
@@ -42,19 +46,22 @@ unsigned long last_loop_time = 0;
 // consistency.
 unsigned long rate_limit_counter = 0;
 
-// Keep a history of the past several input states to identify emergency stops.
-#define INPUT_HIST_SIZE 5
-InputState input_hist[INPUT_HIST_SIZE];
-int input_hist_len = 0;
+// Keep a history of the past several throttle inputs to identify disconnections
+#define THROTTLE_HIST_SIZE 5
+double throttle_hist[THROTTLE_HIST_SIZE];
 
 void setup() {
 
 }
 
 void loop() {
+  InputState is = tiltrotor.get_input_state();
+  throttle_hist[loop_count % THROTTLE_HIST_SIZE] = is.throttle;
+
   // Check for emergency stop
-  InputState is = tiltrotor.get_input_state()
-  if (is.throttle == )
+  if (estop_check()) {
+    tiltrotor.estop();
+  }
 
   switch (tiltrotor.get_op_state()) {
     case STATE_OFF:
@@ -83,6 +90,7 @@ void loop() {
   }
 
   last_loop_time = millis();
+  loop_count += 1;
 }
 
 void loop_off() {
@@ -129,4 +137,14 @@ void hover_loop() {
       is.throttle + hover_pid_support_left.update(-ss.accel[0] - ss.accel[1]),
       is.throttle + hover_pid_support_right.update(-ss.accel[0] + ss.accel[1]));
   }
+}
+
+bool estop_check() {
+  if (loop_count < THROTTLE_HIST_SIZE) return false;
+
+  for (int i = 0; i < THROTTLE_HIST_SIZE; i++) {
+    if (throttle_hist[i] < 1.0) return false;
+  }
+
+  return true;
 }
