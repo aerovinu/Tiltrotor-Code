@@ -1,7 +1,7 @@
 // This is the main file which controls the operation of the tiltrotor.
 // High-level operational logic lives here: the main state loops are here, as
-// does state transition logic. The low-level commands exposed by the Tiltrotor
-// object should be used here for controlling movement.
+// is the state transition logic. The low-level commands exposed by the
+// Tiltrotor object should be used here for controlling movement.
 
 #include "Arduino.h"
 #include "controller.h"
@@ -9,8 +9,12 @@
 
 // This macro will only run a block if it has been more than |ms| milliseconds
 // since the last time it was run.
-#define RATE_LIMIT(ms) rate_limit_counter += millis() - last_loop_time;        \
-    if (rate_limit_counter > ms && (rate_limit_counter -= ms) > 0)
+#define RATE_LIMIT(ms) _rl_counter += millis() - _rl_last_time; _rl_last_time =\
+    millis(); if (_rl_counter > ms && (_rl_counter -= ms) > 0)
+
+// This macro resets the internal `RATE_LIMIT` variables, and should be called
+// when transitioning to a new state (run loop).
+#define RATE_LIMIT_RESET() _rl_counter = 0; _rl_last_time = millis()
 
 void setup();
 void loop();
@@ -20,6 +24,7 @@ void loop_start_flying();
 void loop_fly();
 void loop_start_landing();
 void loop_land();
+void loop_stopped();
 
 void hover_loop();
 bool estop_check();
@@ -36,15 +41,12 @@ TiltrotorHoverPIDController hover_pid_motor_left, hover_pid_motor_right,
 // The number of loop iterations we have gone through.
 unsigned long loop_count = 0;
 
-// The time (milliseconds from program start) when the previous loop iteration
-// finished executing.
-unsigned long last_loop_time = 0;
-
-// You should not need to use this variable. This is used by the RATE_LIMIT
-// macro to count how many milliseconds it has been since the rate limited block
-// was last called. It must be reset when transitioning states to maintain
-// consistency.
-unsigned long rate_limit_counter = 0;
+// These are variables internal to the `RATE_LIMIT` macro that shouldn't need to
+// be used directly. `_rl_counter` is a counter of how many milliseconds have
+// passed since the last time the `RATE_LIMIT` macro was used. `_rl_last_time`
+// is the time at which the `RATE_LIMIT` macro was last used.
+unsigned long _rl_counter = 0;
+unsigned long _rl_last_time = 0;
 
 // Keep a history of the past several throttle inputs to identify disconnections
 #define THROTTLE_HIST_SIZE 5
@@ -87,9 +89,12 @@ void loop() {
     case STATE_LAND:
     loop_land();
     break;
+
+    case STATE_STOPPED:
+    loop_stopped();
+    break;
   }
 
-  last_loop_time = millis();
   loop_count += 1;
 }
 
@@ -120,6 +125,10 @@ void loop_start_landing() {
 
 void loop_land() {
   hover_loop();
+}
+
+void loop_stopped() {
+
 }
 
 void hover_loop() {
