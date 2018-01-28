@@ -21,6 +21,8 @@ void loop_fly();
 void loop_start_landing();
 void loop_land();
 
+void hover_loop();
+
 // The tiltrotor object communicates with the board directly, exposing functions
 // for controlling individual movements.
 Tiltrotor tiltrotor;
@@ -40,11 +42,20 @@ unsigned long last_loop_time = 0;
 // consistency.
 unsigned long rate_limit_counter = 0;
 
+// Keep a history of the past several input states to identify emergency stops.
+#define INPUT_HIST_SIZE 5
+InputState input_hist[INPUT_HIST_SIZE];
+int input_hist_len = 0;
+
 void setup() {
 
 }
 
 void loop() {
+  // Check for emergency stop
+  InputState is = tiltrotor.get_input_state()
+  if (is.throttle == )
+
   switch (tiltrotor.get_op_state()) {
     case STATE_OFF:
     loop_off();
@@ -79,6 +90,31 @@ void loop_off() {
 }
 
 void loop_takeoff() {
+  hover_loop();
+}
+
+void loop_start_flying() {
+
+}
+
+void loop_fly() {
+  InputState is = tiltrotor.get_input_state();
+
+  tiltrotor.set_throttle(is.throttle);
+  tiltrotor.set_aileron_position(is.roll, -is.roll);
+  tiltrotor.set_rudder_position(is.yaw);
+  tiltrotor.set_elevator_position(is.pitch);
+}
+
+void loop_start_landing() {
+
+}
+
+void loop_land() {
+  hover_loop();
+}
+
+void hover_loop() {
   // Only run the loop every 1/10th of a second
   RATE_LIMIT(100) {
     InputState is = tiltrotor.get_input_state();
@@ -93,20 +129,4 @@ void loop_takeoff() {
       is.throttle + hover_pid_support_left.update(-ss.accel[0] - ss.accel[1]),
       is.throttle + hover_pid_support_right.update(-ss.accel[0] + ss.accel[1]));
   }
-}
-
-void loop_start_flying() {
-
-}
-
-void loop_fly() {
-
-}
-
-void loop_start_landing() {
-
-}
-
-void loop_land() {
-
 }
