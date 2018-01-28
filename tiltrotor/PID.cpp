@@ -19,6 +19,7 @@ double PIDController::update(double error) {
   } else {
     deriv = error;
   }
+  //don't need to calculate derivative - gyroscope on IMU gives us derivative data
 
   iters_++;
 
