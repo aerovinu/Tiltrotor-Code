@@ -11,4 +11,3 @@ InputState Controller::get_state() {
 
   return state;
 }
-

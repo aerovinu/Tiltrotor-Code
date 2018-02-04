@@ -3,6 +3,8 @@
 
 // The state of the input at a given time.
 typedef struct {
+  ///////////// Control inputs /////////////
+
   // The throttle value, takes on a value in [0.0, 1.0].
   double throttle;
 
@@ -14,6 +16,8 @@ typedef struct {
 
   // The yaw input controlling the rudder, takes on a value in [-1.0, 1.0].
   double yaw;
+
+  ///////////// Button inputs /////////////
 
 } InputState;
 
