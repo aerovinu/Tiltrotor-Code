@@ -33,6 +33,7 @@ void loop_start_landing();
 void loop_land();
 void loop_stopped();
 
+void transition(OP_STATE to_state);
 void hover_loop();
 bool estop_check();
 
@@ -113,7 +114,7 @@ void loop_takeoff() {
 }
 
 // The number of milliseconds that this transition should take place over.
-#define FLY_TRANSITION_DUR 10 * 1000
+#define TRANSITION_DUR 10 * 1000
 
 // The transition from hover to flying involves the following processes, taking
 // place simultaneously.
@@ -129,13 +130,13 @@ void loop_takeoff() {
 // linearly over the span of the transition.
 void loop_start_flying() {
   double transition_progress =
-      (millis() - transition_start) / FLY_TRANSITION_DUR;
+      (millis() - transition_start) / TRANSITION_DUR;
 
   // If we are done with the transition, make sure we clean up and then
   // transition away.
   if (transition_progress >= 1.0) {
     tiltrotor.set_support_throttle(0.0f);
-    tiltrotor.set_op_state(STATE_FLY);
+    transition(STATE_FLY);
     return;
   }
 
@@ -179,8 +180,35 @@ void loop_fly() {
   tiltrotor.set_elevator_position(is.pitch);
 }
 
+// This is `loop_start_flying` in reverse.
 void loop_start_landing() {
+  double transition_progress =
+      (millis() - transition_start) / TRANSITION_DUR;
 
+  if (transition_progress >= 1.0) {
+    transition(STATE_LAND);
+    return;
+  }
+
+  double pid_scaler = transition_progress;
+
+  tiltrotor.set_tilt_position(transition_progress);
+
+  SensorState ss = tiltrotor.get_sensor_state();
+  double front_pid_throttle = hover_pid_motor_left.update(ss.accel[0]);
+  double back_pid_throttle = hover_pid_motor_right.update(-ss.accel[0]);
+
+  InputState is = tiltrotor.get_input_state();
+
+  tiltrotor.set_throttle(
+    front_pid_throttle * pid_scaler + is.throttle * (1 - pid_scaler));
+
+  tiltrotor.set_support_throttle(back_pid_throttle * pid_scaler);
+
+  tiltrotor.set_aileron_position(
+    is.roll * (1 - pid_scaler), -is.roll * (1 - pid_scaler));
+  tiltrotor.set_rudder_position(is.yaw * (1 - pid_scaler));
+  tiltrotor.set_elevator_position(is.pitch * (1 - pid_scaler));
 }
 
 void loop_land() {
@@ -206,6 +234,21 @@ void hover_loop() {
       is.throttle + hover_pid_support_left.update(-ss.accel[0] - ss.accel[1]),
       is.throttle + hover_pid_support_right.update(-ss.accel[0] + ss.accel[1]));
   }
+}
+
+void transition(OP_STATE to_state) {
+  RATE_LIMIT_RESET();
+
+  switch (to_state) {
+    case STATE_START_FLYING:
+    case STATE_START_LANDING:
+
+    transition_start = millis();
+
+    break;
+  }
+
+  tiltrotor.set_op_state(to_state);
 }
 
 bool estop_check() {
