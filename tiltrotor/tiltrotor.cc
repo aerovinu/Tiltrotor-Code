@@ -6,6 +6,7 @@
 #include "Arduino.h"
 #include "controller.h"
 #include "tiltrotor.h"
+#include "logger.h"
 
 // This macro will only run a block if it has been more than |ms| milliseconds
 // since the last time it was run.
@@ -59,6 +60,9 @@ double throttle_hist[THROTTLE_HIST_SIZE];
 // be set when transitioning to one of the transition states.
 unsigned long transition_start = 0;
 
+// The logger.
+Logger logger;
+
 void setup() {
 
 }
@@ -106,7 +110,7 @@ void loop() {
 }
 
 void loop_off() {
-  // Do nothing
+  logger.log_tick(&tiltrotor, NULL, NULL, NULL, 0);
 }
 
 void loop_takeoff() {
@@ -169,6 +173,10 @@ void loop_start_flying() {
     is.roll * transition_progress, -is.roll * transition_progress);
   tiltrotor.set_rudder_position(is.yaw * transition_progress);
   tiltrotor.set_elevator_position(is.pitch * transition_progress);
+
+  double log_aux[] = { transition_progress, front_pid_throttle,
+      back_pid_throttle };
+  logger.log_tick(&tiltrotor, &ss, &is, log_aux, 3);
 }
 
 void loop_fly() {
@@ -178,6 +186,8 @@ void loop_fly() {
   tiltrotor.set_aileron_position(is.roll, -is.roll);
   tiltrotor.set_rudder_position(is.yaw);
   tiltrotor.set_elevator_position(is.pitch);
+
+  logger.log_tick(&tiltrotor, NULL, &is, NULL, 0);
 }
 
 // This is `loop_start_flying` in reverse.
@@ -209,6 +219,10 @@ void loop_start_landing() {
     is.roll * (1 - pid_scaler), -is.roll * (1 - pid_scaler));
   tiltrotor.set_rudder_position(is.yaw * (1 - pid_scaler));
   tiltrotor.set_elevator_position(is.pitch * (1 - pid_scaler));
+
+  double log_aux[] = { transition_progress, front_pid_throttle,
+      back_pid_throttle };
+  logger.log_tick(&tiltrotor, &ss, &is, log_aux, 3);
 }
 
 void loop_land() {
@@ -216,7 +230,7 @@ void loop_land() {
 }
 
 void loop_stopped() {
-
+  logger.log_tick(&tiltrotor, NULL, NULL, NULL, 0);
 }
 
 void hover_loop() {
@@ -226,13 +240,25 @@ void hover_loop() {
     SensorState ss = tiltrotor.get_sensor_state();
 
     // Compute PID update for main and support motors and set new throttle
+    double main_pid_left =
+        hover_pid_motor_left.update(ss.accel[0] + ss.accel[1]);
+    double main_pid_right =
+        hover_pid_motor_right.update(ss.accel[0] - ss.accel[1]);
     tiltrotor.set_throttle(
-      is.throttle + hover_pid_motor_left.update(ss.accel[0] + ss.accel[1]),
-      is.throttle + hover_pid_motor_right.update(ss.accel[0] - ss.accel[1]));
+      is.throttle + main_pid_left,
+      is.throttle + main_pid_right);
 
+    double support_pid_left =
+        hover_pid_support_left.update(-ss.accel[0] - ss.accel[1]);
+    double support_pid_right =
+        hover_pid_support_right.update(-ss.accel[0] + ss.accel[1]);
     tiltrotor.set_support_throttle(
-      is.throttle + hover_pid_support_left.update(-ss.accel[0] - ss.accel[1]),
-      is.throttle + hover_pid_support_right.update(-ss.accel[0] + ss.accel[1]));
+      is.throttle + support_pid_left,
+      is.throttle + support_pid_right);
+
+    double log_aux[] = { main_pid_left, main_pid_right, support_pid_left,
+        support_pid_right };
+    logger.log_tick(&tiltrotor, &ss, &is, log_aux, 4);
   }
 }
 
