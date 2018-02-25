@@ -15,6 +15,8 @@ void Logger::log_tick(Tiltrotor *tiltrotor, SensorState *ss, InputState *is,
   StaticJsonBuffer<1024> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
 
+  root["t"]  = millis();
+
   if (tiltrotor != NULL) {
     root["op"] = tiltrotor->get_op_state();
   }
